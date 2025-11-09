@@ -1,15 +1,4 @@
-import re
-def enterNumber(text = "Enter value: "):
-    while True:
-        try:
-            number = input(text)
-            return int(number)
-        except ValueError:
-            print("Enter a valid value!")
-
-#base case (for protected fields)
-
-def printSetter(field, *, l = None, r = None):
+def printSetter(field, *, l = None, r = None, raise_exception):
     setter_start = (
         f"@{field}.setter\n"
         f"def set_{field}(self, new_{field}):\n"
@@ -37,24 +26,11 @@ def printSetter(field, *, l = None, r = None):
             f"\telse:\n\t"
         )
 
+
     print(setter_start + logic + f"\tself._{field} = new_{field}\n")
 
-def boundariesList(fieldsList):
-    resultList = list()
-    for field in fieldsList:
-        if '[' not in field:
-            resultList.append([None,None])
-        else:
-            bracket = field.find("[")
-            str = field[bracket+1:-1]
-            boundaries = str.split(":")
-            boundaries = [None if item == '-' else item for item in boundaries]
-            resultList.append(boundaries)
-    # print(resultList)
-    return resultList
-
 def getParameters(line = ""):
-
+# parameters: s(setter), g(getter), e(exception)
     getter = setter = True
     exception = False
 
@@ -112,7 +88,7 @@ def asDictionaryItem(line):
     return name, fieldDictionary
 
 # Main format:
-# field[left_boundary:right_boundary] +s +g -re = default_value, ...
+# field(type)[left_boundary:right_boundary] +s +g -re = default_value, ...
 # field - field name
 # [left_boundary:right_boundary] (optional) - set value boundaries in setters if needed
 # +s +g -e (optional) - default arguments where "-" means False (Remove), and "+" means True (Add)
@@ -122,42 +98,36 @@ def asDictionaryItem(line):
 def classDefiner(fields = None):
     mainDictionary = dict()
 
-    if fields == None:
-        fields = input("Fields: (sep by comma)\n[-:-] after field without space, to choose boundaries\n")
-    res = [asDictionaryItem(field) for field in fields.split(',')]
-    mainDictionary.update(dict(res))
+    fields_key_parameters = [asDictionaryItem(field) for field in fields.split(',')]
+    mainDictionary.update(dict(fields_key_parameters))
     print(mainDictionary)
 
+    fieldsList = mainDictionary.keys()
 
-    fieldsList = [field.split('=')[0].strip() for field in fields.split(',')]
-    if 'self' in fieldsList:
-        fieldsList.remove('self')
-    else:
-        fields = f"self, {fields}"
-    fields = mainDictionary.keys()
+    mainDictionary.pop("self", "else")
 
-
-    pattern = r"\[.*?\]"
-
-    boundList = boundariesList(fieldsList)
-    fieldsList = [re.sub(pattern, '', item) for item in fieldsList]
+    fields = ", ".join(fieldsList)
+    fields = f"self, {fields}"
 
     #init
     print(f"def __init__({fields}):")
     for field in fieldsList:
         print(f"\tself.{field} = {field}")
-    print()
+
     #getters & setters
-    for i, field in enumerate(fieldsList):
-        print(f"@property\ndef get_{field}(self):\n\treturn self._{field}\n")
-        printSetter(field, l = boundList[i][0], r = boundList[i][1])
-        # print(f"@{field}.setter\ndef set_{field}(self, new_{field}):\n\tself._{field} = new_{field}\n")
+    for field in fieldsList:
+        if mainDictionary[field]["parameters"]["getter"]:
+            print(f"@property\ndef get_{field}(self):\n\treturn self._{field}\n")
+        if mainDictionary[field]["parameters"]["setter"]:
+            printSetter(field, l = mainDictionary[field]["boundaries"]["left"], r = mainDictionary[field]["boundaries"]["right"], raise_exception = mainDictionary[field]["parameters"]["exception"])
 
-    # printSetter(fieldsList[0], r = None)
-
-# classDefiner("self, name, description, duration, difficulty = 0")
+    for field in fieldsList:
+        print(f"self.{field} = input('Enter {field}:')")
 
 if __name__ == '__main__':
-    # asDictionaryItem('age[0:100] = 20, name = "Ivan"')
+    #age[0:100] + sge = 123, like[120:130] - se, love[0:] = 1312
     while True:
-        classDefiner()
+        fields = input("Fields: (sep by comma)\n[-:-] after field without space, to choose boundaries\n")
+        if fields == "":
+            break
+        classDefiner(fields)
