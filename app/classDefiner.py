@@ -53,14 +53,89 @@ def boundariesList(fieldsList):
     # print(resultList)
     return resultList
 
+def getParameters(line = ""):
+
+    getter = setter = True
+    exception = False
+
+    line = line.strip()
+    if line != "":
+        value = True
+        for ch in line:
+            if ch == '-': value = False
+            elif ch == '+': value = True
+            match ch:
+                case 's': setter = value
+                case 'g': getter = value
+                case 'e': exception = value
+                case _: pass
+    return {
+        "setter": setter,
+        "getter": getter,
+        "exception": exception
+    }
+
+def asDictionaryItem(line):
+    line = line.strip()
+
+    if "=" in line:
+        main, default = [item.strip() for item in line.split("=")]
+    else:
+        main = line
+        default = None
+
+    if "[" in main and "]" in main: # have brackets
+        open_bracket = main.find("[")
+        close_bracket = main.find("]")
+        name = main[:open_bracket]
+        boundaries = main[open_bracket + 1:close_bracket]
+        left_boundary, right_boundary = [item if item.strip() != '' else None for item in boundaries.split(":")]
+        parameters = getParameters(main[close_bracket + 1:])
+    elif (firstPar := min((main.find(i) for i in ["-", "+"] if main.find(i) >= 0), default=-1)) >= 0:  # no brackets but have parameters
+        name = main[:firstPar]
+        left_boundary = right_boundary = None
+        parameters = getParameters(main[firstPar-1:])
+    else:
+        name = main
+        left_boundary = right_boundary = None
+        parameters = getParameters()
+
+    fieldDictionary = {
+        "boundaries":
+            {
+                "left": left_boundary,
+                "right": right_boundary
+            },
+        "default": default,
+        "parameters": parameters
+    }
+    return name, fieldDictionary
+
+# Main format:
+# field[left_boundary:right_boundary] +s +g -re = default_value, ...
+# field - field name
+# [left_boundary:right_boundary] (optional) - set value boundaries in setters if needed
+# +s +g -e (optional) - default arguments where "-" means False (Remove), and "+" means True (Add)
+# s: setters, g:getters, re: raise_exception (if user gives incorrect data, would it raise exception or no)
+# = default_value (optional) - set a default value to field via class constructor
+
 def classDefiner(fields = None):
+    mainDictionary = dict()
+
     if fields == None:
         fields = input("Fields: (sep by comma)\n[-:-] after field without space, to choose boundaries\n")
+    res = [asDictionaryItem(field) for field in fields.split(',')]
+    mainDictionary.update(dict(res))
+    print(mainDictionary)
+
+
     fieldsList = [field.split('=')[0].strip() for field in fields.split(',')]
     if 'self' in fieldsList:
         fieldsList.remove('self')
     else:
         fields = f"self, {fields}"
+    fields = mainDictionary.keys()
+
 
     pattern = r"\[.*?\]"
 
@@ -68,7 +143,6 @@ def classDefiner(fields = None):
     fieldsList = [re.sub(pattern, '', item) for item in fieldsList]
 
     #init
-    fields = re.sub(pattern, '', fields)
     print(f"def __init__({fields}):")
     for field in fieldsList:
         print(f"\tself.{field} = {field}")
@@ -84,5 +158,6 @@ def classDefiner(fields = None):
 # classDefiner("self, name, description, duration, difficulty = 0")
 
 if __name__ == '__main__':
+    # asDictionaryItem('age[0:100] = 20, name = "Ivan"')
     while True:
         classDefiner()
